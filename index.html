@@ -470,6 +470,7 @@ footer{text-align:center; padding:24px; color:var(--text-faint); font-size:11.5p
     </div>
     <div class="header-actions">
       <div class="clock" id="clockDisplay">--</div>
+      <div class="clock" id="syncStatus">⏳ Carregando dados da planilha…</div>
       <button class="icon-btn" id="btnAlerts" title="Central de alertas">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
         <span class="bell-badge" id="bellBadge" style="display:none">0</span>
@@ -653,7 +654,7 @@ footer{text-align:center; padding:24px; color:var(--text-faint); font-size:11.5p
 
 </div>
 
-<footer>Dados armazenados localmente no navegador (localStorage) · Nenhuma informação é enviada a servidores externos</footer>
+<footer>Dados salvos no Google Sheets · Uma cópia local (localStorage) é mantida como cache offline</footer>
 
 <!-- FORM MODAL -->
 <div class="overlay" id="formOverlay">
@@ -740,6 +741,9 @@ footer{text-align:center; padding:24px; color:var(--text-faint); font-size:11.5p
 ===================================================================== */
 const STORAGE_KEY = 'iguaFeriasDB_v1';
 
+/* URL do seu Google Apps Script publicado (doGet/doPost) */
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwTIvkx8nzrkhQvQ_O3-LlhcSLEsS9P_wNY6EpgaYftFKXtGzidZ79dqqhW3fCbeFyq2w/exec';
+
 const REGIONAIS = [
   {key:'SUL', label:'Sul', hue:'var(--r-sul)'},
   {key:'METROPOLITANA', label:'Metropolitana', hue:'var(--r-met)'},
@@ -795,9 +799,47 @@ function loadDB(){
   try{ return JSON.parse(raw); }catch(e){ console.error('DB corrompido', e); return emptyDB(); }
 }
 function emptyDB(){ const db={}; REGIONAIS.forEach(r=> db[r.key]=[]); return db; }
-function saveDB(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(DB)); }
 
-let DB = loadDB();
+/* Salva localmente (cache instantâneo) e envia para o Google Sheets.
+   Usa Content-Type text/plain para evitar preflight CORS no Apps Script. */
+function saveDB(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(DB));
+  setSyncStatus('salvando');
+  fetch(SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(DB)
+  })
+  .then(r => r.json())
+  .then(res => {
+    if(res.status === 'sucesso') setSyncStatus('ok');
+    else setSyncStatus('erro');
+  })
+  .catch(() => setSyncStatus('erro'));
+}
+
+/* Busca o banco atual do Google Sheets. Retorna Promise<db|null>. */
+function fetchDBFromSheet(){
+  return fetch(SCRIPT_URL)
+    .then(r => r.json())
+    .then(db => {
+      const clean = emptyDB();
+      REGIONAIS.forEach(r => { clean[r.key] = Array.isArray(db[r.key]) ? db[r.key] : []; });
+      return clean;
+    })
+    .catch(err => { console.error('Falha ao buscar planilha', err); return null; });
+}
+
+function setSyncStatus(status){
+  const el = document.getElementById('syncStatus');
+  if(!el) return;
+  if(status === 'salvando') el.textContent = '⏳ Salvando na planilha…';
+  else if(status === 'ok') el.textContent = '✅ Sincronizado com o Google Sheets';
+  else if(status === 'erro') el.textContent = '⚠️ Falha ao sincronizar — dados salvos só localmente';
+  else if(status === 'carregando') el.textContent = '⏳ Carregando dados da planilha…';
+}
+
+let DB = loadDB(); // cache local, usado enquanto a planilha carrega
 let state = { activeGroup:'SUL', search:'', sortKey:'Nome', sortDir:1, editingId:null };
 
 /* =====================================================================
@@ -2334,6 +2376,20 @@ document.getElementById('calNextMonth').addEventListener('click', () => {
 
 updateClock();
 renderAll();
+
+/* Carrega os dados reais da planilha assim que a página abre.
+   Enquanto isso, o que já estava salvo localmente fica na tela. */
+setSyncStatus('carregando');
+fetchDBFromSheet().then(db => {
+  if(db){
+    DB = db;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(DB));
+    renderAll();
+    setSyncStatus('ok');
+  } else {
+    setSyncStatus('erro');
+  }
+});
 </script>
 </body>
 </html>
