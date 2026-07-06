@@ -512,7 +512,7 @@ footer{text-align:center; padding:24px; color:var(--text-faint); font-size:11.5p
       <div class="toolbar-left">
         <div class="search-box">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          <input type="text" id="searchInput" placeholder="Buscar por nome, matrícula/CPF, cargo...">
+          <input type="text" id="searchInput" placeholder="Buscar por nome, matrícula, núcleo, cargo...">
         </div>
       </div>
       <div class="toolbar-right">
@@ -633,7 +633,7 @@ footer{text-align:center; padding:24px; color:var(--text-faint); font-size:11.5p
       <div class="toolbar-left">
         <div class="search-box">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          <input type="text" id="concSearchInput" placeholder="Buscar por nome, matrícula/CPF, regional...">
+          <input type="text" id="concSearchInput" placeholder="Buscar por nome, matrícula, núcleo...">
         </div>
       </div>
     </div>
@@ -642,7 +642,7 @@ footer{text-align:center; padding:24px; color:var(--text-faint); font-size:11.5p
       <table id="concTable">
         <thead>
           <tr>
-            <th>Nome</th><th>Matrícula/CPF</th><th>Regional</th><th>Cargo</th>
+            <th>Nome</th><th>Matrícula</th><th>Regional</th><th>Núcleo</th><th>Cargo</th>
             <th>Início</th><th>Retorno</th><th>Dias</th><th>Substituto</th><th>Abono</th><th>Ações</th>
           </tr>
         </thead>
@@ -756,10 +756,11 @@ const SEED = [];
 const FIELDS = [
   {key:'Gestor', label:'Gestor', type:'text'},
   {key:'Tipo', label:'Colaborador', type:'select', options:['','Próprio','Terceiro']},
-  {key:'Matricula', label:'Matrícula/CPF', type:'text', required:true, mono:true, hint:'Se for colaborador terceiro, informar o CPF. Se for colaborador próprio, informar a matrícula.'},
+  {key:'Matricula', label:'Matrícula', type:'text', required:true, mono:true, hint:'Se for colaborador terceiro, informar o CPF. Se for colaborador próprio, informar a matrícula.'},
   {key:'Nome', label:'Nome completo', type:'text', required:true, span2:true},
   {key:'Regional', label:'Regional', type:'text'},
-  {key:'Cargo', label:'Cargo', type:'select', options:['','Auxiliar de Encanador','Volante','Encanador','Operador de CCO','Analista','Encarregado','Supervisor','Especialista','Coordenador','Gerente'], span2:true},
+  {key:'Nucleo', label:'Núcleo', type:'text'},
+  {key:'Cargo', label:'Cargo', type:'select', options:['','Operador','Supervisor','Analista','Encarregado','Gerente','Coordenador'], span2:true},
   {key:'Admissao', label:'Data de admissão', type:'date'},
   {key:'UltimaFerias', label:'Data da última férias gozada', type:'computed-history'},
   {key:'Inicio', label:'Início das férias', type:'date'},
@@ -773,8 +774,8 @@ const FIELDS = [
 ];
 
 const EXPORT_HEADERS = {
-  Gestor:'Gestor', Tipo:'Colaborador', Matricula:'Matricula/CPF', Nome:'Nome', Regional:'Regional',
-  Cargo:'Cargo',
+  Gestor:'Gestor', Tipo:'Colaborador', Matricula:'Matricula', Nome:'Nome', Regional:'Regional',
+  Nucleo:'Núcleo', Cargo:'Cargo',
   Admissao:'Data da Admissão', UltimaFerias:'Última Férias Gozada', Inicio:'Inicio', Retorno:'Retorno', Dias:'Dias', Substituto:'Substituto',
   Abono:'Abono', Agendada:'Agendada', Adiantamento13:'Adiantamento 13', Observacao:'Observação'
 };
@@ -943,7 +944,7 @@ function periodsOverlap(a, b){
   return aI <= bR && bI <= aR;
 }
 function sameNucleo(a, b){
-  const na = normText(a.Regional), nb = normText(b.Regional);
+  const na = normText(a.Nucleo), nb = normText(b.Nucleo);
   return na !== '' && na === nb;
 }
 
@@ -1169,7 +1170,7 @@ function renderStats(){
    RENDER: TABLE
 ===================================================================== */
 const TABLE_COLS = [
-  {key:'Nome', label:'Nome'}, {key:'Matricula', label:'Matrícula/CPF'}, {key:'Regional', label:'Regional'},
+  {key:'Nome', label:'Nome'}, {key:'Matricula', label:'Matrícula'}, {key:'Nucleo', label:'Núcleo'},
   {key:'Cargo', label:'Cargo'}, {key:'Inicio', label:'Início'}, {key:'Retorno', label:'Retorno'},
   {key:'Dias', label:'Dias'}, {key:'Substituto', label:'Substituto'}, {key:'status', label:'Status'},
   {key:'alerta', label:'Observação/Alerta'}
@@ -1204,7 +1205,7 @@ function getFilteredSorted(){
   let list = [...getActiveList(state.activeGroup)];
   const q = state.search.trim().toLowerCase();
   if(q){
-    list = list.filter(r => ['Nome','Matricula','Regional','Cargo','Gestor'].some(k =>
+    list = list.filter(r => ['Nome','Matricula','Nucleo','Cargo','Gestor'].some(k =>
       String(r[k]||'').toLowerCase().includes(q)
     ));
   }
@@ -1257,7 +1258,7 @@ function renderTable(){
     return `<tr data-id="${rec.id}">
       <td>${escapeHtml(rec.Nome||'—')}</td>
       <td class="mono">${escapeHtml(String(rec.Matricula||'—'))}</td>
-      <td>${escapeHtml(rec.Regional||'—')}</td>
+      <td>${escapeHtml(rec.Nucleo||'—')}</td>
       <td>${escapeHtml(rec.Cargo||'—')}</td>
       <td class="mono">${fmtDate(rec.Inicio)}</td>
       <td class="mono">${fmtDate(rec.Retorno)}</td>
@@ -1341,7 +1342,7 @@ function getCalendarSidebarRecords(){
   let list = getCalendarFilteredRecords();
   const q = calState.search.trim().toLowerCase();
   if(q){
-    list = list.filter(r => ['Nome','Matricula','Cargo','Regional'].some(k => String(r[k]||'').toLowerCase().includes(q)));
+    list = list.filter(r => ['Nome','Matricula','Cargo','Nucleo'].some(k => String(r[k]||'').toLowerCase().includes(q)));
   }
   list.sort((a,b) => String(a.Nome||'').localeCompare(String(b.Nome||''), 'pt-BR'));
   return list;
@@ -1551,7 +1552,7 @@ function openHistoryModal(matricula, nome){
       return `<div class="history-item${isCurrent?' is-current':''}">
         <div>
           <div class="hi-period">${fmtDate(rec.Inicio)} – ${fmtDate(rec.Retorno)}${isCurrent?'<span class="hi-tag">Este registro</span>':''}</div>
-          <div class="hi-meta">${regLabel(rec._regional)} · ${rec.Dias||'—'} dia(s) · ${rec.Abono==='Sim'?'com abono':'sem abono'}</div>
+          <div class="hi-meta">${regLabel(rec._regional)} · ${escapeHtml(rec.Nucleo||'—')} · ${rec.Dias||'—'} dia(s) · ${rec.Abono==='Sim'?'com abono':'sem abono'}</div>
         </div>
         <span class="status-badge st-${st.code}"><span class="status-dot"></span>${st.label}</span>
       </div>`;
@@ -1621,7 +1622,7 @@ function getConcluidasFiltered(){
   }
   const q = concState.search.trim().toLowerCase();
   if(q){
-    list = list.filter(r => ['Nome','Matricula','Regional','Cargo'].some(k =>
+    list = list.filter(r => ['Nome','Matricula','Nucleo','Cargo'].some(k =>
       String(r[k]||'').toLowerCase().includes(q)
     ));
   }
@@ -1656,7 +1657,7 @@ function renderConcluidasTable(){
   const regLabel = k => (REGIONAIS.find(r=>r.key===k)||{}).label || k;
 
   if(list.length === 0){
-    body.innerHTML = `<tr><td colspan="10">
+    body.innerHTML = `<tr><td colspan="11">
       <div class="empty-state">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 4v16"/></svg>
         <h3>Nenhuma férias concluída encontrada</h3>
@@ -1671,6 +1672,7 @@ function renderConcluidasTable(){
       <td>${escapeHtml(rec.Nome||'—')}</td>
       <td class="mono">${escapeHtml(String(rec.Matricula||'—'))}</td>
       <td>${regLabel(rec._regional)}</td>
+      <td>${escapeHtml(rec.Nucleo||'—')}</td>
       <td>${escapeHtml(rec.Cargo||'—')}</td>
       <td class="mono">${fmtDate(rec.Inicio)}</td>
       <td class="mono">${fmtDate(rec.Retorno)}</td>
@@ -1801,8 +1803,7 @@ function buildFormGrid(rec){
     } else {
       control = `<input id="fld_${f.key}" type="${f.type}" value="${escapeHtml(val)}" ${f.mono?'style="font-family:var(--font-mono)"':''}>`;
     }
-    const hintHtml = f.hint ? `<div class="hint" style="margin-top:5px;">${escapeHtml(f.hint)}</div>` : '';
-    return `<div class="field${spanCls}"><label>${f.label}${f.required?' <span class="req">*</span>':''}</label>${control}${hintHtml}</div>`;
+    return `<div class="field${spanCls}"><label>${f.label}${f.required?' <span class="req">*</span>':''}</label>${control}</div>`;
   }).join('');
 
   /* Eventos dos campos de data (permite colar dd/mm/aaaa e escolher no calendário) */
@@ -2046,7 +2047,7 @@ function isSubstitutoValido(nomeSubstituto){
 }
 
 /* Campos que identificam a PESSOA (repetem em todo novo período de férias dela) */
-const PERSONAL_FIELD_KEYS = ['Gestor','Tipo','Matricula','Nome','Regional','Cargo','Admissao'];
+const PERSONAL_FIELD_KEYS = ['Gestor','Tipo','Matricula','Nome','Regional','Nucleo','Cargo','Admissao'];
 
 /* Monta um "rascunho" só com os dados pessoais de um registro existente,
    deixando em branco tudo que é específico do período de férias */
