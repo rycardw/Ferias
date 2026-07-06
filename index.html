@@ -943,7 +943,7 @@ function periodsOverlap(a, b){
   return aI <= bR && bI <= aR;
 }
 function sameNucleo(a, b){
-  const na = normText(a.Nucleo), nb = normText(b.Nucleo);
+  const na = normText(a.Regional), nb = normText(b.Regional);
   return na !== '' && na === nb;
 }
 
