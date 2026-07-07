@@ -570,11 +570,11 @@ footer{text-align:center; padding:24px; color:var(--text-faint); font-size:11.5p
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
         <span class="bell-badge" id="bellBadge" style="display:none">0</span>
       </button>
-      <button class="btn" id="btnExportBackup" title="Baixar backup completo em .json">
+      <button class="btn" id="btnExportBackup" title="Baixar backup completo em .json" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
         Backup .json
       </button>
-      <button class="btn" id="btnImportBackup">
+      <button class="btn" id="btnImportBackup" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
         Importar
       </button>
@@ -595,7 +595,6 @@ footer{text-align:center; padding:24px; color:var(--text-faint); font-size:11.5p
     <button class="tab-btn active" data-tab="lista">Lista de Colaboradores</button>
     <button class="tab-btn" data-tab="calendario">Calendário</button>
     <button class="tab-btn" data-tab="concluidas">Férias Concluídas</button>
-    <button class="tab-btn" data-tab="logs">Logs do sistema</button>
   </div>
 
   <div class="view active" id="viewLista">
@@ -748,37 +747,6 @@ footer{text-align:center; padding:24px; color:var(--text-faint); font-size:11.5p
 
   </div>
 
-  <div class="view" id="viewLogs">
-
-    <div class="toolbar">
-      <div class="toolbar-left">
-        <div class="search-box">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          <input type="text" id="logSearchInput" placeholder="Buscar por usuário, ação ou detalhe...">
-        </div>
-      </div>
-      <div class="toolbar-right">
-        <div class="clock" id="logStatus" style="margin-right:4px;">—</div>
-        <button class="btn" id="btnRefreshLogs">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-          Atualizar
-        </button>
-      </div>
-    </div>
-
-    <div class="table-wrap">
-      <table id="logsTable">
-        <thead>
-          <tr>
-            <th>Data/Hora</th><th>Usuário</th><th>Nome</th><th>Ação</th><th>Detalhes</th>
-          </tr>
-        </thead>
-        <tbody id="logsTableBody"></tbody>
-      </table>
-    </div>
-
-  </div>
-
 </div>
 
 <footer>Dados salvos no Google Sheets · Uma cópia local (localStorage) é mantida como cache offline</footer>
@@ -890,8 +858,8 @@ function getAuthSession(){
   }catch(e){ return null; }
 }
 
-function setAuthSession(usuario, nome){
-  sessionStorage.setItem(AUTH_KEY, JSON.stringify({ usuario, nome: nome || usuario, ts: Date.now() }));
+function setAuthSession(usuario, nome, admin){
+  sessionStorage.setItem(AUTH_KEY, JSON.stringify({ usuario, nome: nome || usuario, admin: !!admin, ts: Date.now() }));
 }
 
 function clearAuthSession(){
@@ -903,11 +871,13 @@ function showLoginScreen(){
   document.getElementById('appRoot').style.display = 'none';
 }
 
-function hideLoginScreen(nome){
+function hideLoginScreen(nome, admin){
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('appRoot').style.display = '';
   const nomeEl = document.getElementById('loggedUserName');
   if(nomeEl) nomeEl.textContent = nome || '—';
+  document.getElementById('btnExportBackup').style.display = admin ? 'inline-flex' : 'none';
+  document.getElementById('btnImportBackup').style.display = admin ? 'inline-flex' : 'none';
 }
 
 function fazerLogin(usuario, senha){
@@ -925,8 +895,8 @@ function fazerLogin(usuario, senha){
   .then(r => r.json())
   .then(res => {
     if(res.status === 'sucesso'){
-      setAuthSession(res.usuario || usuario, res.nome);
-      hideLoginScreen(res.nome || usuario);
+      setAuthSession(res.usuario || usuario, res.nome, res.admin);
+      hideLoginScreen(res.nome || usuario, res.admin);
       iniciarApp();
     } else {
       errEl.textContent = res.mensagem || 'Usuário ou senha inválidos.';
@@ -1064,70 +1034,11 @@ function fetchDBFromSheet(){
     .catch(err => { console.error('Falha ao buscar planilha', err); return null; });
 }
 
-/* =====================================================================
-   LOGS DO SISTEMA
-===================================================================== */
-let logsCache = [];
-
-function fetchLogsFromSheet(){
-  return fetch(SCRIPT_URL + '?action=logs')
-    .then(r => r.json())
-    .then(res => Array.isArray(res.logs) ? res.logs : [])
-    .catch(err => { console.error('Falha ao buscar logs', err); return null; });
-}
-
-function renderLogsView(){
-  const statusEl = document.getElementById('logStatus');
-  const tbody = document.getElementById('logsTableBody');
-  statusEl.textContent = '⏳ Carregando logs…';
-  tbody.innerHTML = '';
-
-  fetchLogsFromSheet().then(logs => {
-    if(logs === null){
-      statusEl.textContent = '⚠️ Falha ao carregar logs';
-      return;
-    }
-    logsCache = logs;
-    statusEl.textContent = `✅ ${logs.length} registro(s) de log`;
-    renderLogsTable();
-  });
-}
-
-function renderLogsTable(){
-  const tbody = document.getElementById('logsTableBody');
-  const termo = (document.getElementById('logSearchInput').value || '').trim().toLowerCase();
-
-  let lista = logsCache;
-  if(termo){
-    lista = lista.filter(l =>
-      (l.usuario||'').toLowerCase().includes(termo) ||
-      (l.nome||'').toLowerCase().includes(termo) ||
-      (l.acao||'').toLowerCase().includes(termo) ||
-      (l.detalhes||'').toLowerCase().includes(termo)
-    );
-  }
-
-  if(lista.length === 0){
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:24px; color:var(--text-dim);">Nenhum log encontrado.</td></tr>';
-    return;
-  }
-
-  tbody.innerHTML = lista.map(l => `
-    <tr>
-      <td style="white-space:nowrap; font-family:var(--font-mono); font-size:12px;">${escapeHtml(l.timestamp||'')}</td>
-      <td>${escapeHtml(l.usuario||'')}</td>
-      <td>${escapeHtml(l.nome||'')}</td>
-      <td>${escapeHtml(l.acao||'')}</td>
-      <td>${escapeHtml(l.detalhes||'')}</td>
-    </tr>
-  `).join('');
-}
-
 function setSyncStatus(status){
   const el = document.getElementById('syncStatus');
   if(!el) return;
   if(status === 'salvando') el.textContent = '⏳ Salvando na planilha…';
-  else if(status === 'ok') el.textContent = '✅ Sincronizado com o Google Sheets';
+  else if(status === 'ok') el.textContent = '✅ Sincronizado';
   else if(status === 'erro') el.textContent = '⚠️ Falha ao sincronizar — dados salvos só localmente';
   else if(status === 'carregando') el.textContent = '⏳ Carregando dados da planilha…';
 }
@@ -1591,10 +1502,8 @@ function switchTab(tab){
   document.getElementById('viewLista').classList.toggle('active', tab === 'lista');
   document.getElementById('viewCalendario').classList.toggle('active', tab === 'calendario');
   document.getElementById('viewConcluidas').classList.toggle('active', tab === 'concluidas');
-  document.getElementById('viewLogs').classList.toggle('active', tab === 'logs');
   if(tab === 'calendario') renderCalendarView();
   if(tab === 'concluidas') renderConcluidasView();
-  if(tab === 'logs') renderLogsView();
 }
 
 /* =====================================================================
@@ -2662,13 +2571,6 @@ document.getElementById('concSearchInput').addEventListener('input', e => {
   concState.search = e.target.value; renderConcluidasStats(); renderConcluidasTable();
 });
 
-document.getElementById('logSearchInput').addEventListener('input', () => {
-  renderLogsTable();
-});
-document.getElementById('btnRefreshLogs').addEventListener('click', () => {
-  renderLogsView();
-});
-
 document.getElementById('calPrevMonth').addEventListener('click', () => {
   calState.month--; if(calState.month < 0){ calState.month = 11; calState.year--; }
   renderCalendarStats(); renderCalendarGrid();
@@ -2706,7 +2608,7 @@ function iniciarApp(){
 (function(){
   const sessao = getAuthSession();
   if(sessao){
-    hideLoginScreen(sessao.nome);
+    hideLoginScreen(sessao.nome, sessao.admin);
     iniciarApp();
   } else {
     showLoginScreen();
